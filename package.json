@@ -1,5 +1,5 @@
 {
-  "name": "jira-mcp",
+  "name": "@rambou/jira-mcp",
   "version": "1.0.0",
   "description": "A Jira MCP instance",
   "main": "src/index.js",

@@ -28,6 +28,11 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org/
       - run: npm ci
-      - run: npm publish
+      # 1. Sync package.json version with the GitHub Release tag
+      - name: Sync version
+        run: npm version ${{ github.ref_name }} --no-git-tag-version
+        
+      # 2. Publish as a public scoped package
+      - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{secrets.npm_token}}

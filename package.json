@@ -1,0 +1,27 @@
+{
+  "name": "jira-mcp",
+  "version": "1.0.0",
+  "description": "A Jira MCP instance",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test",
+    "start": "node src/index.js",
+    "lint": "node --check src/*.js test/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rambou/jira-mcp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Rambou/jira-mcp/issues"
+  },
+  "homepage": "https://github.com/Rambou/jira-mcp#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
+  }
+}

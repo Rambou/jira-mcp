@@ -1,0 +1,60 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const { JiraClient, safeJsonParse } = require('../src/jiraClient');
+
+test('safeJsonParse falls back to raw payload', () => {
+  assert.deepEqual(safeJsonParse('not-json'), { raw: 'not-json' });
+});
+
+test('JiraClient sends bearer auth and serializes JSON body', async () => {
+  let captured;
+  const fakeFetch = async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ key: 'PROJ-1' })
+    };
+  };
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123'
+    },
+    fakeFetch
+  );
+
+  const result = await client.createIssue({
+    projectKey: 'PROJ',
+    issueType: 'Task',
+    summary: 'Hello'
+  });
+
+  assert.equal(captured.url, 'https://jira.example.com/rest/api/3/issue');
+  assert.equal(captured.init.headers.Authorization, 'Bearer abc123');
+  assert.equal(result.key, 'PROJ-1');
+});
+
+test('JiraClient throws readable Jira API errors', async () => {
+  const fakeFetch = async () => ({
+    ok: false,
+    status: 400,
+    statusText: 'Bad Request',
+    text: async () => JSON.stringify({ errorMessages: ['Invalid JQL'] })
+  });
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123'
+    },
+    fakeFetch
+  );
+
+  await assert.rejects(
+    async () => client.searchIssues({ jql: 'bad query' }),
+    /Jira API request failed \(400\): Invalid JQL/
+  );
+});

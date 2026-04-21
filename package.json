@@ -1,6 +1,9 @@
 {
   "name": "@rambou/jira-mcp",
   "version": "1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "A Jira MCP instance",
   "main": "src/index.js",
   "scripts": {

@@ -2,20 +2,51 @@
 
 A Model Context Protocol (MCP) server for common Jira REST API actions.
 
-## Configuration
+## Install
 
-Set the following environment variables:
+```bash
+npm install
+```
+
+## Configure
+
+Set these environment variables for the MCP server process:
 
 - `JIRA_BASE_URL` (required): Base Jira URL, for example `https://your-domain.atlassian.net`
 - `JIRA_TOKEN` (required): Jira API token / PAT
 - `JIRA_API_BASE_PATH` (optional): Jira API base path, default `/rest/api/3`
 
-## Run
+### Example MCP client configuration
+
+This server uses stdio transport. In an MCP client that supports `mcpServers` (for example Claude Desktop/Cline/Cursor), configure it like this:
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "command": "node",
+      "args": ["/absolute/path/to/jira-mcp/src/index.js"],
+      "env": {
+        "JIRA_BASE_URL": "https://your-domain.atlassian.net",
+        "JIRA_TOKEN": "your-token",
+        "JIRA_API_BASE_PATH": "/rest/api/3"
+      }
+    }
+  }
+}
+```
+
+If your client supports launching through npm, you can also use:
 
 ```bash
-npm install
 npm start
 ```
+
+## Use from MCP clients
+
+1. Add the server configuration in your MCP client.
+2. Restart/reload the MCP client.
+3. Invoke one of the Jira tools below from your client chat or tool UI.
 
 ## Available MCP tools
 

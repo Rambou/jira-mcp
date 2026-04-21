@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { loadConfig } = require('./config');
 const { JiraClient } = require('./jiraClient');

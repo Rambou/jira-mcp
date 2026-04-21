@@ -6,6 +6,9 @@
   },
   "description": "A Jira MCP instance",
   "main": "src/index.js",
+  "bin": {
+    "jira-mcp": "./src/index.js"
+  },
   "scripts": {
     "test": "node --test",
     "start": "node src/index.js",

@@ -24,8 +24,8 @@ This server uses stdio transport. In an MCP client that supports `mcpServers` (f
 {
   "mcpServers": {
     "jira": {
-      "command": "node",
-      "args": ["/absolute/path/to/jira-mcp/src/index.js"],
+      "command": "npx",
+      "args": ["-y", "@rambou/jira-mcp"],
       "env": {
         "JIRA_BASE_URL": "https://your-domain.atlassian.net",
         "JIRA_TOKEN": "your-token",
@@ -36,7 +36,7 @@ This server uses stdio transport. In an MCP client that supports `mcpServers` (f
 }
 ```
 
-If your client supports launching through npm, you can also use:
+For local development from this repository, you can also use:
 
 ```bash
 npm start

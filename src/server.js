@@ -70,6 +70,21 @@ function createServer(jiraClient) {
   );
 
   server.registerTool(
+    'jira_edit_issue_description',
+    {
+      description: 'Edit a Jira issue description (use Jira Wiki Markup, not Markdown)',
+      inputSchema: {
+        issueKey: z.string().min(1),
+        description: z.string().min(1).describe('Description text in Jira Wiki Markup (not Markdown)')
+      }
+    },
+    async ({ issueKey, description }) => {
+      const result = await jiraClient.updateIssueDescription({ issueKey, description });
+      return jsonContent(result);
+    }
+  );
+
+  server.registerTool(
     'jira_transition_issue',
     {
       description: 'Transition a Jira issue to a new status by transition ID',

@@ -49,6 +49,14 @@ class JiraClient {
     });
   }
 
+  async updateIssueDescription({ issueKey, description }) {
+    return this.request('PUT', `/issue/${encodeURIComponent(issueKey)}`, {
+      fields: {
+        description
+      }
+    });
+  }
+
   async transitionIssue({ issueKey, transitionId }) {
     return this.request('POST', `/issue/${encodeURIComponent(issueKey)}/transitions`, {
       transition: {

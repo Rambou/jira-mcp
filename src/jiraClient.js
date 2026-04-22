@@ -18,7 +18,7 @@ class JiraClient {
     });
   }
 
-  async createIssue({ projectKey, issueType, summary, description }) {
+  async createIssue({ projectKey, issueType, summary, description, parentIssueKey }) {
     const payload = {
       fields: {
         project: { key: projectKey },
@@ -40,7 +40,53 @@ class JiraClient {
       };
     }
 
+    if (parentIssueKey) {
+      payload.fields.parent = { key: parentIssueKey };
+    }
+
     return this.request('POST', '/issue', payload);
+  }
+
+  async createSubtasks({ parentIssueKey, subtasks, subtaskIssueType = 'Sub-task' }) {
+    const parentIssue = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(parentIssueKey)}?fields=issuetype,project`
+    );
+
+    if (parentIssue?.fields?.issuetype?.subtask) {
+      return {
+        allowed: false,
+        reason: 'Cannot create subtasks under a subtask issue',
+        parentIssueKey,
+        parentIssueType: parentIssue.fields.issuetype.name,
+        created: []
+      };
+    }
+
+    const projectKey = parentIssue?.fields?.project?.key;
+
+    if (!projectKey) {
+      throw new Error(`Could not determine project key for parent issue: ${parentIssueKey}`);
+    }
+
+    const created = [];
+    for (const subtask of subtasks) {
+      const result = await this.createIssue({
+        projectKey,
+        issueType: subtaskIssueType,
+        summary: subtask.summary,
+        description: subtask.description,
+        parentIssueKey
+      });
+      created.push(result);
+    }
+
+    return {
+      allowed: true,
+      parentIssueKey,
+      parentIssueType: parentIssue.fields?.issuetype?.name,
+      created
+    };
   }
 
   async addComment({ issueKey, comment }) {

@@ -88,3 +88,116 @@ test('JiraClient addComment sends plain string body for Jira Server/Data Center'
   assert.equal(captured.init.body, JSON.stringify({ body: '*Bold* _formatted_' }));
   assert.equal(result.id, '10001');
 });
+
+test('JiraClient createIssue includes parent when parentIssueKey is provided', async () => {
+  let captured;
+  const fakeFetch = async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ key: 'PROJ-2' })
+    };
+  };
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123'
+    },
+    fakeFetch
+  );
+
+  await client.createIssue({
+    projectKey: 'PROJ',
+    issueType: 'Sub-task',
+    summary: 'Child issue',
+    parentIssueKey: 'PROJ-1'
+  });
+
+  const payload = JSON.parse(captured.init.body);
+  assert.deepEqual(payload.fields.parent, { key: 'PROJ-1' });
+});
+
+test('JiraClient createSubtasks creates subtasks when parent type allows it', async () => {
+  const calls = [];
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init });
+
+    if (url.endsWith('/issue/PROJ-1?fields=issuetype,project')) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            fields: {
+              issuetype: { name: 'Task', subtask: false },
+              project: { key: 'PROJ' }
+            }
+          })
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ key: `PROJ-${calls.length}` })
+    };
+  };
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123'
+    },
+    fakeFetch
+  );
+
+  const result = await client.createSubtasks({
+    parentIssueKey: 'PROJ-1',
+    subtasks: [{ summary: 'Subtask 1' }, { summary: 'Subtask 2', description: 'Details' }]
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.created.length, 2);
+  assert.equal(calls.length, 3);
+
+  const firstSubtaskPayload = JSON.parse(calls[1].init.body);
+  assert.equal(firstSubtaskPayload.fields.issuetype.name, 'Sub-task');
+  assert.deepEqual(firstSubtaskPayload.fields.parent, { key: 'PROJ-1' });
+});
+
+test('JiraClient createSubtasks does not create subtasks under a subtask parent', async () => {
+  const calls = [];
+  const fakeFetch = async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          fields: {
+            issuetype: { name: 'Sub-task', subtask: true },
+            project: { key: 'PROJ' }
+          }
+        })
+    };
+  };
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123'
+    },
+    fakeFetch
+  );
+
+  const result = await client.createSubtasks({
+    parentIssueKey: 'PROJ-2',
+    subtasks: [{ summary: 'Should not be created' }]
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.created.length, 0);
+  assert.equal(calls.length, 1);
+});

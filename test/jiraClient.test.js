@@ -89,6 +89,43 @@ test('JiraClient addComment sends plain string body for Jira Server/Data Center'
   assert.equal(result.id, '10001');
 });
 
+test('JiraClient updateIssueDescription sends wiki markup string in fields.description', async () => {
+  let captured;
+  const fakeFetch = async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 204,
+      text: async () => ''
+    };
+  };
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123',
+      apiBasePath: '/rest/api/2'
+    },
+    fakeFetch
+  );
+
+  const result = await client.updateIssueDescription({
+    issueKey: 'PROJ-1',
+    description: '*Bold* _formatted_'
+  });
+
+  assert.equal(captured.url, 'https://jira.example.com/rest/api/2/issue/PROJ-1');
+  assert.equal(
+    captured.init.body,
+    JSON.stringify({
+      fields: {
+        description: '*Bold* _formatted_'
+      }
+    })
+  );
+  assert.deepEqual(result, { success: true });
+});
+
 test('JiraClient createIssue includes parent when parentIssueKey is provided', async () => {
   let captured;
   const fakeFetch = async (url, init) => {

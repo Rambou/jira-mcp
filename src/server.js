@@ -95,6 +95,10 @@ function createServer(jiraClient) {
       }
     },
     async ({ issueKey, addLabels, removeLabels }) => {
+      if ((!addLabels || addLabels.length === 0) && (!removeLabels || removeLabels.length === 0)) {
+        throw new Error('At least one label must be provided to add or remove');
+      }
+
       const result = await jiraClient.amendIssueLabels({ issueKey, addLabels, removeLabels });
       return jsonContent(result);
     }

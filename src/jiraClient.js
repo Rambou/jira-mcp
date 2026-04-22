@@ -111,6 +111,10 @@ class JiraClient {
     });
   }
 
+  async getCurrentUser() {
+    return this.request('GET', '/myself');
+  }
+
   async amendIssueLabels({ issueKey, addLabels = [], removeLabels = [] }) {
     const labelUpdates = [
       ...addLabels.map((label) => ({ add: label })),

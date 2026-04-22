@@ -17,7 +17,9 @@ function loadConfig(env = process.env) {
   return {
     baseUrl: normalizeBaseUrl(baseUrl),
     token,
-    apiBasePath: env.JIRA_API_BASE_PATH || '/rest/api/3'
+    apiBasePath: env.JIRA_API_BASE_PATH || '/rest/api/3',
+    tempoApiToken: env.TEMPO_API_TOKEN || null,
+    tempoBaseUrl: normalizeBaseUrl(env.TEMPO_BASE_URL || 'https://api.tempo.io/4')
   };
 }
 

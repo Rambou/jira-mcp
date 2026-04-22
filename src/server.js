@@ -1,7 +1,7 @@
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { z } = require('zod');
 
-function createServer(jiraClient) {
+function createServer(jiraClient, tempoClient) {
   const server = new McpServer({
     name: 'jira-mcp',
     version: '1.0.0'
@@ -145,6 +145,116 @@ function createServer(jiraClient) {
       return jsonContent(result);
     }
   );
+
+  if (tempoClient) {
+    const dateSchema = z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
+    const timeSchema = z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in HH:MM format');
+
+    server.registerTool(
+      'tempo_list_worklogs',
+      {
+        description:
+          'List Tempo worklogs for the current Jira user within a date range',
+        inputSchema: {
+          startDate: dateSchema.describe('Start date in YYYY-MM-DD format'),
+          endDate: dateSchema.describe('End date in YYYY-MM-DD format')
+        }
+      },
+      async ({ startDate, endDate }) => {
+        const result = await tempoClient.getWorklogs({ from: startDate, to: endDate });
+        return jsonContent(result);
+      }
+    );
+
+    server.registerTool(
+      'tempo_create_worklog',
+      {
+        description: 'Log time against a Jira issue in Tempo',
+        inputSchema: {
+          issueKey: z.string().min(1).describe('Jira issue key, e.g. PROJ-123'),
+          timeSpentHours: z.number().positive().describe('Hours spent (e.g. 1.5)'),
+          date: dateSchema.describe('Work date in YYYY-MM-DD format'),
+          description: z.string().optional().describe('Optional worklog description'),
+          startTime: timeSchema.optional().describe('Optional start time in HH:MM format')
+        }
+      },
+      async ({ issueKey, timeSpentHours, date, description, startTime }) => {
+        const result = await tempoClient.createWorklog({
+          issueKey,
+          timeSpentHours,
+          date,
+          description,
+          startTime
+        });
+        return jsonContent(result);
+      }
+    );
+
+    server.registerTool(
+      'tempo_bulk_create_worklogs',
+      {
+        description: 'Log time against multiple Jira issues in Tempo in a single operation',
+        inputSchema: {
+          worklogs: z
+            .array(
+              z.object({
+                issueKey: z.string().min(1).describe('Jira issue key, e.g. PROJ-123'),
+                timeSpentHours: z.number().positive().describe('Hours spent (e.g. 1.5)'),
+                date: dateSchema.describe('Work date in YYYY-MM-DD format'),
+                description: z.string().optional(),
+                startTime: timeSchema.optional().describe('Optional start time in HH:MM format')
+              })
+            )
+            .min(1)
+        }
+      },
+      async ({ worklogs }) => {
+        const result = await tempoClient.bulkCreateWorklogs(worklogs);
+        return jsonContent(result);
+      }
+    );
+
+    server.registerTool(
+      'tempo_edit_worklog',
+      {
+        description: 'Edit an existing Tempo worklog',
+        inputSchema: {
+          worklogId: z.string().min(1).describe('Tempo worklog ID'),
+          timeSpentHours: z.number().positive().describe('Updated hours spent (e.g. 1.5)'),
+          date: dateSchema.optional().describe('Updated work date in YYYY-MM-DD format'),
+          description: z.string().optional().describe('Updated worklog description'),
+          startTime: timeSchema.optional().describe('Updated start time in HH:MM format')
+        }
+      },
+      async ({ worklogId, timeSpentHours, date, description, startTime }) => {
+        const result = await tempoClient.updateWorklog(worklogId, {
+          timeSpentHours,
+          date,
+          description,
+          startTime
+        });
+        return jsonContent(result);
+      }
+    );
+
+    server.registerTool(
+      'tempo_delete_worklog',
+      {
+        description: 'Delete an existing Tempo worklog',
+        inputSchema: {
+          worklogId: z.string().min(1).describe('Tempo worklog ID to delete')
+        }
+      },
+      async ({ worklogId }) => {
+        const result = await tempoClient.deleteWorklog(worklogId);
+        return jsonContent(result);
+      }
+    );
+  }
 
   return server;
 }

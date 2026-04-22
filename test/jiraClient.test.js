@@ -293,3 +293,26 @@ test('JiraClient amendIssueLabels requires at least one add/remove label', async
     /At least one label must be provided to add or remove/
   );
 });
+
+test('JiraClient getCurrentUser returns user data', async () => {
+  let captured;
+  const fakeFetch = async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ accountId: 'abc123', displayName: 'John Doe' })
+    };
+  };
+
+  const client = new JiraClient(
+    { baseUrl: 'https://jira.example.com', token: 'abc123' },
+    fakeFetch
+  );
+
+  const result = await client.getCurrentUser();
+
+  assert.equal(captured.url, 'https://jira.example.com/rest/api/3/myself');
+  assert.equal(result.accountId, 'abc123');
+  assert.equal(result.displayName, 'John Doe');
+});

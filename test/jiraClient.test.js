@@ -58,3 +58,33 @@ test('JiraClient throws readable Jira API errors', async () => {
     /Jira API request failed \(400\): Invalid JQL/
   );
 });
+
+test('JiraClient addComment sends plain string body for Jira Server/Data Center', async () => {
+  let captured;
+  const fakeFetch = async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ id: '10001' })
+    };
+  };
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123',
+      apiBasePath: '/rest/api/2'
+    },
+    fakeFetch
+  );
+
+  const result = await client.addComment({
+    issueKey: 'PROJ-1',
+    comment: '*Bold* _formatted_'
+  });
+
+  assert.equal(captured.url, 'https://jira.example.com/rest/api/2/issue/PROJ-1/comment');
+  assert.equal(captured.init.body, JSON.stringify({ body: '*Bold* _formatted_' }));
+  assert.equal(result.id, '10001');
+});

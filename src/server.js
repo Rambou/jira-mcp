@@ -99,6 +99,29 @@ function createServer(jiraClient) {
     }
   );
 
+  server.registerTool(
+    'jira_generate_subtasks',
+    {
+      description: 'Generate subtasks for a parent Jira issue when its type allows subtasks',
+      inputSchema: {
+        parentIssueKey: z.string().min(1).describe('Parent issue key, e.g. PROJ-123'),
+        subtaskIssueType: z.string().min(1).default('Sub-task'),
+        subtasks: z
+          .array(
+            z.object({
+              summary: z.string().min(1),
+              description: z.string().optional()
+            })
+          )
+          .min(1)
+      }
+    },
+    async ({ parentIssueKey, subtasks, subtaskIssueType }) => {
+      const result = await jiraClient.createSubtasks({ parentIssueKey, subtasks, subtaskIssueType });
+      return jsonContent(result);
+    }
+  );
+
   return server;
 }
 

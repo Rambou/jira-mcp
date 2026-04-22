@@ -21,20 +21,7 @@ test('loadConfig applies defaults', () => {
     {
       baseUrl: 'https://jira.example.com',
       token: 'token',
-      apiBasePath: '/rest/api/3',
-      tempoApiToken: null,
-      tempoBaseUrl: 'https://api.tempo.io/4'
+      apiBasePath: '/rest/api/3'
     }
   );
-});
-
-test('loadConfig includes Tempo fields when provided', () => {
-  const config = loadConfig({
-    JIRA_BASE_URL: 'https://jira.example.com',
-    JIRA_TOKEN: 'token',
-    TEMPO_API_TOKEN: 'tempo-secret',
-    TEMPO_BASE_URL: 'https://api.tempo.io/4/'
-  });
-  assert.equal(config.tempoApiToken, 'tempo-secret');
-  assert.equal(config.tempoBaseUrl, 'https://api.tempo.io/4');
 });

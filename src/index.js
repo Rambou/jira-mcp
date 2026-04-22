@@ -9,7 +9,7 @@ const { createServer } = require('./server');
 async function main() {
   const config = loadConfig();
   const jiraClient = new JiraClient(config);
-  const tempoClient = config.tempoApiToken ? new TempoClient(config, jiraClient) : null;
+  const tempoClient = new TempoClient(config, jiraClient);
   const server = createServer(jiraClient, tempoClient);
   const transport = new StdioServerTransport();
 

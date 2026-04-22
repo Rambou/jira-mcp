@@ -3,43 +3,64 @@ const assert = require('node:assert/strict');
 
 const { TempoClient, safeJsonParse } = require('../src/tempoClient');
 
-// Fake JiraClient used across tests
-function fakeJiraClient({ accountId = 'user-123', issueId = '10001', issueKey = 'PROJ-1' } = {}) {
+// Fake JiraClient: returns a Jira Server user (name-based, not accountId)
+function fakeJiraClient({ username = 'john.doe' } = {}) {
   return {
-    getCurrentUser: async () => ({ accountId }),
-    getIssue: async () => ({ id: issueId, key: issueKey })
+    getCurrentUser: async () => ({ name: username, displayName: 'John Doe' })
   };
 }
 
 // Build a TempoClient backed by a custom fetch stub
 function makeClient(fakeFetch, jiraClient) {
   return new TempoClient(
-    { tempoBaseUrl: 'https://api.tempo.io/4', tempoApiToken: 'tempo-token' },
+    { baseUrl: 'https://jira.example.com', token: 'jira-token' },
     jiraClient || fakeJiraClient(),
     fakeFetch
   );
+}
+
+// Worklog fixture matching Tempo Timesheets 4 response shape
+function worklogFixture(overrides = {}) {
+  return {
+    id: 12345,
+    comment: 'Work done',
+    dateStarted: '2024-01-15T09:00:00.000+0000',
+    timeSpentSeconds: 3600,
+    worker: 'john.doe',
+    issue: { key: 'PROJ-1', id: 10001 },
+    ...overrides
+  };
 }
 
 test('safeJsonParse falls back to raw payload', () => {
   assert.deepEqual(safeJsonParse('not-json'), { raw: 'not-json' });
 });
 
-test('TempoClient sends Bearer auth and constructs correct URL', async () => {
+test('TempoClient derives base URL from JIRA_BASE_URL with Timesheets path', () => {
+  const client = new TempoClient(
+    { baseUrl: 'https://jira.example.com', token: 'tok' },
+    fakeJiraClient(),
+    async () => ({ ok: true, status: 204, text: async () => '' })
+  );
+  assert.equal(client.baseUrl, 'https://jira.example.com/rest/tempo-timesheets/4');
+});
+
+test('TempoClient sends Bearer auth using Jira token', async () => {
   let captured;
   const fakeFetch = async (url, init) => {
     captured = { url, init };
     return {
       ok: true,
       status: 200,
-      text: async () => JSON.stringify({ tempoWorklogId: 1 })
+      text: async () => JSON.stringify(worklogFixture())
     };
   };
 
   const client = makeClient(fakeFetch);
-  await client.request('GET', '/worklogs/1');
+  await client.request('GET', '/worklogs/12345');
 
-  assert.equal(captured.url, 'https://api.tempo.io/4/worklogs/1');
-  assert.equal(captured.init.headers.Authorization, 'Bearer tempo-token');
+  assert.equal(captured.url, 'https://jira.example.com/rest/tempo-timesheets/4/worklogs/12345');
+  assert.equal(captured.init.headers.Authorization, 'Bearer jira-token');
 });
 
 test('TempoClient handles 204 No Content', async () => {
@@ -51,7 +72,7 @@ test('TempoClient handles 204 No Content', async () => {
   assert.deepEqual(result, { success: true });
 });
 
-test('TempoClient throws readable Tempo API errors', async () => {
+test('TempoClient throws readable error on HTTP failure', async () => {
   const fakeFetch = async () => ({
     ok: false,
     status: 400,
@@ -66,73 +87,34 @@ test('TempoClient throws readable Tempo API errors', async () => {
   );
 });
 
-test('TempoClient getWorklogs fetches single page and enriches with issue keys', async () => {
-  const calls = [];
+test('TempoClient getWorklogs requests correct URL with username and date params', async () => {
+  let capturedUrl;
   const fakeFetch = async (url) => {
-    calls.push(url);
+    capturedUrl = url;
     return {
       ok: true,
       status: 200,
-      text: async () =>
-        JSON.stringify({
-          results: [
-            {
-              tempoWorklogId: 1,
-              issue: { id: 10001 },
-              timeSpentSeconds: 3600,
-              startDate: '2024-01-15'
-            }
-          ],
-          metadata: {}
-        })
+      text: async () => JSON.stringify([worklogFixture()])
     };
   };
 
   const client = makeClient(fakeFetch);
   const result = await client.getWorklogs({ from: '2024-01-01', to: '2024-01-31' });
 
-  assert.equal(calls.length, 1);
-  assert.equal(result.total, 1);
-  assert.equal(result.worklogs[0].issueKey, 'PROJ-1');
-  assert.equal(result.worklogs[0].tempoWorklogId, 1);
-});
-
-test('TempoClient getWorklogs follows pagination metadata.next', async () => {
-  const calls = [];
-  const fakeFetch = async (url) => {
-    calls.push(url);
-    const isFirst = calls.length === 1;
-    return {
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          results: [
-            { tempoWorklogId: isFirst ? 1 : 2, issue: { id: 10001 }, timeSpentSeconds: 3600, startDate: '2024-01-15' }
-          ],
-          metadata: isFirst
-            ? { next: 'https://api.tempo.io/4/worklogs/user/user-123?from=2024-01-01&to=2024-01-31&offset=50' }
-            : {}
-        })
-    };
-  };
-
-  const client = makeClient(fakeFetch);
-  const result = await client.getWorklogs({ from: '2024-01-01', to: '2024-01-31' });
-
-  assert.equal(calls.length, 2);
   assert.equal(
-    calls[1],
-    'https://api.tempo.io/4/worklogs/user/user-123?from=2024-01-01&to=2024-01-31&offset=50'
+    capturedUrl,
+    'https://jira.example.com/rest/tempo-timesheets/4/worklogs?username=john.doe&dateFrom=2024-01-01&dateTo=2024-01-31'
   );
-  assert.equal(result.total, 2);
+  assert.equal(result.total, 1);
+  assert.equal(result.worklogs[0].id, 12345);
+  assert.equal(result.worklogs[0].issue.key, 'PROJ-1');
 });
 
 test('TempoClient getWorklogs handles empty result set', async () => {
   const fakeFetch = async () => ({
     ok: true,
     status: 200,
-    text: async () => JSON.stringify({ results: [], metadata: {} })
+    text: async () => JSON.stringify([])
   });
 
   const client = makeClient(fakeFetch);
@@ -142,14 +124,14 @@ test('TempoClient getWorklogs handles empty result set', async () => {
   assert.deepEqual(result.worklogs, []);
 });
 
-test('TempoClient createWorklog constructs correct payload', async () => {
+test('TempoClient createWorklog constructs correct Timesheets payload', async () => {
   let captured;
   const fakeFetch = async (url, init) => {
     captured = { url, init };
     return {
       ok: true,
       status: 200,
-      text: async () => JSON.stringify({ tempoWorklogId: 42 })
+      text: async () => JSON.stringify(worklogFixture({ id: 42 }))
     };
   };
 
@@ -162,99 +144,115 @@ test('TempoClient createWorklog constructs correct payload', async () => {
     startTime: '09:00'
   });
 
-  assert.equal(captured.url, 'https://api.tempo.io/4/worklogs');
+  assert.equal(captured.url, 'https://jira.example.com/rest/tempo-timesheets/4/worklogs');
   assert.equal(captured.init.method, 'POST');
 
   const body = JSON.parse(captured.init.body);
-  assert.equal(body.issueId, 10001);
+  assert.equal(body.issue.key, 'PROJ-1');
   assert.equal(body.timeSpentSeconds, 7200);
-  assert.equal(body.startDate, '2024-01-15');
-  assert.equal(body.authorAccountId, 'user-123');
-  assert.equal(body.description, 'Working on it');
-  assert.equal(body.startTime, '09:00:00');
+  assert.equal(body.dateStarted, '2024-01-15T09:00:00.000+0000');
+  assert.equal(body.worker, 'john.doe');
+  assert.equal(body.comment, 'Working on it');
 
-  assert.equal(result.tempoWorklogId, 42);
+  assert.equal(result.id, 42);
 });
 
-test('TempoClient createWorklog omits startTime when not provided', async () => {
+test('TempoClient createWorklog uses midnight when startTime is omitted', async () => {
   let captured;
   const fakeFetch = async (url, init) => {
     captured = { url, init };
     return {
       ok: true,
       status: 200,
-      text: async () => JSON.stringify({ tempoWorklogId: 43 })
+      text: async () => JSON.stringify(worklogFixture())
     };
   };
 
   const client = makeClient(fakeFetch);
-  await client.createWorklog({
-    issueKey: 'PROJ-1',
-    timeSpentHours: 1,
-    date: '2024-01-15'
-  });
+  await client.createWorklog({ issueKey: 'PROJ-1', timeSpentHours: 1, date: '2024-01-15' });
 
   const body = JSON.parse(captured.init.body);
-  assert.equal(Object.hasOwn(body, 'startTime'), false);
+  assert.equal(body.dateStarted, '2024-01-15T00:00:00.000+0000');
 });
 
-test('TempoClient bulkCreateWorklogs groups entries by issue and reports results', async () => {
-  let capturedUrl;
-  let capturedBody;
+test('TempoClient createWorklog does not include issueId or authorAccountId', async () => {
+  let captured;
   const fakeFetch = async (url, init) => {
-    capturedUrl = url;
-    capturedBody = JSON.parse(init.body);
+    captured = { url, init };
     return {
       ok: true,
       status: 200,
-      text: async () => JSON.stringify([{ tempoWorklogId: 1 }, { tempoWorklogId: 2 }])
+      text: async () => JSON.stringify(worklogFixture())
+    };
+  };
+
+  const client = makeClient(fakeFetch);
+  await client.createWorklog({ issueKey: 'PROJ-1', timeSpentHours: 1, date: '2024-01-15' });
+
+  const body = JSON.parse(captured.init.body);
+  assert.equal(Object.hasOwn(body, 'issueId'), false);
+  assert.equal(Object.hasOwn(body, 'authorAccountId'), false);
+});
+
+test('TempoClient bulkCreateWorklogs creates each worklog individually and reports results', async () => {
+  const calls = [];
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(worklogFixture({ id: calls.length * 10 }))
     };
   };
 
   const client = makeClient(fakeFetch);
   const result = await client.bulkCreateWorklogs([
     { issueKey: 'PROJ-1', timeSpentHours: 1, date: '2024-01-15' },
-    { issueKey: 'PROJ-1', timeSpentHours: 2, date: '2024-01-16' }
+    { issueKey: 'PROJ-2', timeSpentHours: 2, date: '2024-01-16' }
   ]);
 
-  assert.equal(capturedUrl, 'https://api.tempo.io/4/worklogs/issue/10001/bulk');
-  assert.equal(capturedBody.length, 2);
-  assert.equal(capturedBody[0].timeSpentSeconds, 3600);
-  assert.equal(capturedBody[1].timeSpentSeconds, 7200);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].body.issue.key, 'PROJ-1');
+  assert.equal(calls[1].body.issue.key, 'PROJ-2');
   assert.equal(result.totalCreated, 2);
   assert.equal(result.totalFailed, 0);
-  assert.equal(result.results[0].worklogId, 1);
-  assert.equal(result.results[1].worklogId, 2);
+  assert.equal(result.results[0].issueKey, 'PROJ-1');
+  assert.equal(result.results[1].issueKey, 'PROJ-2');
 });
 
 test('TempoClient bulkCreateWorklogs handles partial failures gracefully', async () => {
-  const failingJira = {
-    getCurrentUser: async () => ({ accountId: 'user-123' }),
-    getIssue: async (key) => {
-      if (key === 'PROJ-1') return { id: '10001', key: 'PROJ-1' };
-      throw new Error('Issue not found: ' + key);
+  let callCount = 0;
+  const fakeFetch = async () => {
+    callCount++;
+    if (callCount === 1) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(worklogFixture({ id: 1 }))
+      };
     }
+    return {
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      text: async () => JSON.stringify({ message: 'Server error' })
+    };
   };
-  const fakeFetch = async () => ({
-    ok: true,
-    status: 200,
-    text: async () => JSON.stringify([{ tempoWorklogId: 1 }])
-  });
 
-  const client = makeClient(fakeFetch, failingJira);
+  const client = makeClient(fakeFetch);
   const result = await client.bulkCreateWorklogs([
     { issueKey: 'PROJ-1', timeSpentHours: 1, date: '2024-01-15' },
-    { issueKey: 'BAD-999', timeSpentHours: 2, date: '2024-01-16' }
+    { issueKey: 'PROJ-2', timeSpentHours: 2, date: '2024-01-16' }
   ]);
 
   assert.equal(result.totalCreated, 1);
   assert.equal(result.totalFailed, 1);
   assert.equal(result.results[0].issueKey, 'PROJ-1');
-  assert.equal(result.errors[0].issueKey, 'BAD-999');
-  assert.match(result.errors[0].error, /Issue not found/);
+  assert.equal(result.errors[0].issueKey, 'PROJ-2');
+  assert.match(result.errors[0].error, /Tempo API request failed/);
 });
 
-test('TempoClient updateWorklog fetches existing worklog then sends update', async () => {
+test('TempoClient updateWorklog fetches existing worklog then PUTs with merged fields', async () => {
   const calls = [];
   const fakeFetch = async (url, init) => {
     calls.push({ url, method: init.method, body: init.body });
@@ -262,44 +260,38 @@ test('TempoClient updateWorklog fetches existing worklog then sends update', asy
       return {
         ok: true,
         status: 200,
-        text: async () =>
-          JSON.stringify({
-            tempoWorklogId: '99',
-            author: { accountId: 'user-abc' },
-            startDate: '2024-01-10',
-            timeSpentSeconds: 3600
-          })
+        text: async () => JSON.stringify(worklogFixture())
       };
     }
     return {
       ok: true,
       status: 200,
-      text: async () => JSON.stringify({ tempoWorklogId: '99' })
+      text: async () => JSON.stringify(worklogFixture({ timeSpentSeconds: 10800 }))
     };
   };
 
   const client = makeClient(fakeFetch);
-  await client.updateWorklog('99', {
+  await client.updateWorklog('12345', {
     timeSpentHours: 3,
-    date: '2024-01-15',
-    description: 'Updated description'
+    date: '2024-01-20',
+    description: 'Updated comment'
   });
 
   assert.equal(calls.length, 2);
   assert.equal(calls[0].method, 'GET');
-  assert.equal(calls[0].url, 'https://api.tempo.io/4/worklogs/99');
+  assert.equal(calls[0].url, 'https://jira.example.com/rest/tempo-timesheets/4/worklogs/12345');
   assert.equal(calls[1].method, 'PUT');
-  assert.equal(calls[1].url, 'https://api.tempo.io/4/worklogs/99');
+  assert.equal(calls[1].url, 'https://jira.example.com/rest/tempo-timesheets/4/worklogs/12345');
 
   const putBody = JSON.parse(calls[1].body);
-  assert.equal(putBody.authorAccountId, 'user-abc');
-  assert.equal(putBody.startDate, '2024-01-15');
+  assert.equal(putBody.worker, 'john.doe');
+  assert.equal(putBody.issue.key, 'PROJ-1');
   assert.equal(putBody.timeSpentSeconds, 10800);
-  assert.equal(putBody.billableSeconds, 10800);
-  assert.equal(putBody.description, 'Updated description');
+  assert.equal(putBody.dateStarted, '2024-01-20T00:00:00.000+0000');
+  assert.equal(putBody.comment, 'Updated comment');
 });
 
-test('TempoClient updateWorklog preserves existing startDate when not provided', async () => {
+test('TempoClient updateWorklog preserves existing dateStarted when date not provided', async () => {
   const calls = [];
   const fakeFetch = async (url, init) => {
     calls.push({ method: init.method, body: init.body });
@@ -307,34 +299,28 @@ test('TempoClient updateWorklog preserves existing startDate when not provided',
       return {
         ok: true,
         status: 200,
-        text: async () =>
-          JSON.stringify({
-            tempoWorklogId: '77',
-            author: { accountId: 'user-abc' },
-            startDate: '2024-01-10',
-            timeSpentSeconds: 1800
-          })
+        text: async () => JSON.stringify(worklogFixture())
       };
     }
     return {
       ok: true,
       status: 200,
-      text: async () => JSON.stringify({ tempoWorklogId: '77' })
+      text: async () => JSON.stringify(worklogFixture())
     };
   };
 
   const client = makeClient(fakeFetch);
-  await client.updateWorklog('77', { timeSpentHours: 1 });
+  await client.updateWorklog('12345', { timeSpentHours: 1 });
 
   const putBody = JSON.parse(calls[1].body);
-  assert.equal(putBody.startDate, '2024-01-10');
+  assert.equal(putBody.dateStarted, '2024-01-15T09:00:00.000+0000');
 });
 
 test('TempoClient updateWorklog throws when timeSpentHours is missing', async () => {
   const client = makeClient(async () => {});
 
   await assert.rejects(
-    async () => client.updateWorklog('99', {}),
+    async () => client.updateWorklog('12345', {}),
     /timeSpentHours is required/
   );
 });
@@ -347,9 +333,9 @@ test('TempoClient deleteWorklog sends DELETE request and returns worklogId', asy
   };
 
   const client = makeClient(fakeFetch);
-  const result = await client.deleteWorklog('55');
+  const result = await client.deleteWorklog('12345');
 
-  assert.equal(captured.url, 'https://api.tempo.io/4/worklogs/55');
+  assert.equal(captured.url, 'https://jira.example.com/rest/tempo-timesheets/4/worklogs/12345');
   assert.equal(captured.method, 'DELETE');
-  assert.deepEqual(result, { success: true, worklogId: '55' });
+  assert.deepEqual(result, { success: true, worklogId: '12345' });
 });

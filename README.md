@@ -53,5 +53,6 @@ npm start
 - `jira_get_issue` - Get issue details by key
 - `jira_search_issues` - Search with JQL
 - `jira_create_issue` - Create an issue
+- `jira_generate_subtasks` - Generate subtasks for a parent issue when the parent type allows subtasks
 - `jira_add_comment` - Add a comment to an issue (comment text should use Jira Wiki Markup, not Markdown)
 - `jira_transition_issue` - Transition an issue by transition id

@@ -57,10 +57,10 @@ function createServer(jiraClient) {
   server.registerTool(
     'jira_add_comment',
     {
-      description: 'Add a comment to a Jira issue',
+      description: 'Add a comment to a Jira issue (use Jira Wiki Markup, not Markdown)',
       inputSchema: {
         issueKey: z.string().min(1),
-        comment: z.string().min(1)
+        comment: z.string().min(1).describe('Comment text in Jira Wiki Markup (not Markdown)')
       }
     },
     async ({ issueKey, comment }) => {

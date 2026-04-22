@@ -45,16 +45,7 @@ class JiraClient {
 
   async addComment({ issueKey, comment }) {
     return this.request('POST', `/issue/${encodeURIComponent(issueKey)}/comment`, {
-      body: {
-        type: 'doc',
-        version: 1,
-        content: [
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: comment }]
-          }
-        ]
-      }
+      body: comment
     });
   }
 

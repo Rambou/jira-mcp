@@ -107,6 +107,30 @@ function createServer(jiraClient) {
     }
   );
 
+  server.registerTool(
+    'jira_amend_issue_labels',
+    {
+      description: 'Add and/or remove labels on a Jira issue',
+      inputSchema: z
+        .object({
+          issueKey: z.string().min(1),
+          addLabels: z.array(z.string().min(1)).optional(),
+          removeLabels: z.array(z.string().min(1)).optional()
+        })
+        .refine(
+          ({ addLabels, removeLabels }) =>
+            (addLabels && addLabels.length > 0) || (removeLabels && removeLabels.length > 0),
+          {
+            message: 'At least one label must be provided to add or remove'
+          }
+        )
+    },
+    async ({ issueKey, addLabels, removeLabels }) => {
+      const result = await jiraClient.amendIssueLabels({ issueKey, addLabels, removeLabels });
+      return jsonContent(result);
+    }
+  );
+
   return server;
 }
 

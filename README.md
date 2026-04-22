@@ -56,3 +56,4 @@ npm start
 - `jira_generate_subtasks` - Generate subtasks for a parent issue when the parent type allows subtasks
 - `jira_add_comment` - Add a comment to an issue (comment text should use Jira Wiki Markup, not Markdown)
 - `jira_transition_issue` - Transition an issue by transition id
+- `jira_amend_issue_labels` - Add and/or remove labels on an issue

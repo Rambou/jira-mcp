@@ -57,6 +57,23 @@ class JiraClient {
     });
   }
 
+  async amendIssueLabels({ issueKey, addLabels = [], removeLabels = [] }) {
+    const labelUpdates = [
+      ...addLabels.map((label) => ({ add: label })),
+      ...removeLabels.map((label) => ({ remove: label }))
+    ];
+
+    if (labelUpdates.length === 0) {
+      throw new Error('At least one label must be provided to add or remove');
+    }
+
+    return this.request('PUT', `/issue/${encodeURIComponent(issueKey)}`, {
+      update: {
+        labels: labelUpdates
+      }
+    });
+  }
+
   async request(method, path, body) {
     const response = await this.fetch(`${this.baseUrl}${this.apiBasePath}${path}`, {
       method,

@@ -88,3 +88,58 @@ test('JiraClient addComment sends plain string body for Jira Server/Data Center'
   assert.equal(captured.init.body, JSON.stringify({ body: '*Bold* _formatted_' }));
   assert.equal(result.id, '10001');
 });
+
+test('JiraClient amendIssueLabels sends add and remove operations', async () => {
+  let captured;
+  const fakeFetch = async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 204,
+      text: async () => ''
+    };
+  };
+
+  const client = new JiraClient(
+    {
+      baseUrl: 'https://jira.example.com',
+      token: 'abc123'
+    },
+    fakeFetch
+  );
+
+  const result = await client.amendIssueLabels({
+    issueKey: 'PROJ-1',
+    addLabels: ['backend', 'urgent'],
+    removeLabels: ['triage']
+  });
+
+  assert.equal(captured.url, 'https://jira.example.com/rest/api/3/issue/PROJ-1');
+  assert.equal(captured.init.method, 'PUT');
+  assert.equal(
+    captured.init.body,
+    JSON.stringify({
+      update: {
+        labels: [{ add: 'backend' }, { add: 'urgent' }, { remove: 'triage' }]
+      }
+    })
+  );
+  assert.deepEqual(result, { success: true });
+});
+
+test('JiraClient amendIssueLabels requires at least one add/remove label', async () => {
+  const client = new JiraClient({
+    baseUrl: 'https://jira.example.com',
+    token: 'abc123'
+  });
+
+  await assert.rejects(
+    async () =>
+      client.amendIssueLabels({
+        issueKey: 'PROJ-1',
+        addLabels: [],
+        removeLabels: []
+      }),
+    /At least one label must be provided to add or remove/
+  );
+});

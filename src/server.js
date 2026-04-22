@@ -84,6 +84,22 @@ function createServer(jiraClient) {
     }
   );
 
+  server.registerTool(
+    'jira_amend_issue_labels',
+    {
+      description: 'Add and/or remove labels on a Jira issue',
+      inputSchema: {
+        issueKey: z.string().min(1),
+        addLabels: z.array(z.string().min(1)).optional(),
+        removeLabels: z.array(z.string().min(1)).optional()
+      }
+    },
+    async ({ issueKey, addLabels, removeLabels }) => {
+      const result = await jiraClient.amendIssueLabels({ issueKey, addLabels, removeLabels });
+      return jsonContent(result);
+    }
+  );
+
   return server;
 }
 

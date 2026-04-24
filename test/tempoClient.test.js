@@ -87,10 +87,10 @@ test('TempoClient throws readable error on HTTP failure', async () => {
   );
 });
 
-test('TempoClient getWorklogs requests correct URL with username and date params', async () => {
-  let capturedUrl;
-  const fakeFetch = async (url) => {
-    capturedUrl = url;
+test('TempoClient getWorklogs POSTs to /worklogs/search with correct body', async () => {
+  let captured;
+  const fakeFetch = async (url, init) => {
+    captured = { url, init };
     return {
       ok: true,
       status: 200,
@@ -102,9 +102,14 @@ test('TempoClient getWorklogs requests correct URL with username and date params
   const result = await client.getWorklogs({ from: '2024-01-01', to: '2024-01-31' });
 
   assert.equal(
-    capturedUrl,
-    'https://jira.example.com/rest/tempo-timesheets/4/worklogs?username=john.doe&dateFrom=2024-01-01&dateTo=2024-01-31'
+    captured.url,
+    'https://jira.example.com/rest/tempo-timesheets/4/worklogs/search'
   );
+  assert.equal(captured.init.method, 'POST');
+  const body = JSON.parse(captured.init.body);
+  assert.equal(body.from, '2024-01-01');
+  assert.equal(body.to, '2024-01-31');
+  assert.deepEqual(body.worker, ['john.doe']);
   assert.equal(result.total, 1);
   assert.equal(result.worklogs[0].id, 12345);
   assert.equal(result.worklogs[0].issue.key, 'PROJ-1');

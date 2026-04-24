@@ -13,8 +13,9 @@ class TempoClient {
     const username = user.name;
 
     const worklogs = await this.request(
-      'GET',
-      `/worklogs?username=${encodeURIComponent(username)}&dateFrom=${encodeURIComponent(from)}&dateTo=${encodeURIComponent(to)}`
+      'POST',
+      '/worklogs/search',
+      { from, to, worker: [username] }
     );
 
     const list = Array.isArray(worklogs) ? worklogs : [];

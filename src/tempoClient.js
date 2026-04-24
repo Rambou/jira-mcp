@@ -12,10 +12,11 @@ class TempoClient {
     const user = await this.jiraClient.getCurrentUser();
     const username = user.name;
 
-    const worklogs = await this.request(
-      'GET',
-      `/worklogs?username=${encodeURIComponent(username)}&dateFrom=${encodeURIComponent(from)}&dateTo=${encodeURIComponent(to)}`
-    );
+    const worklogs = await this.request('POST', '/worklogs/search', {
+      from,
+      to,
+      worker: [username]
+    });
 
     const list = Array.isArray(worklogs) ? worklogs : [];
     return { worklogs: list, total: list.length };
